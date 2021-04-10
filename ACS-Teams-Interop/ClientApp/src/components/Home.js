@@ -55,8 +55,6 @@ export class Home extends Component {
 
             var name = this.txtUserName.current.value;
             if (!name) name = "Unknown";
-            
-            console.log(name);
             this.callAgent = await callClient.createCallAgent(tokenCredential, { displayName: name });
             this.deviceManager = await callClient.getDeviceManager();
             this.setState({ initiated: true });
@@ -76,19 +74,22 @@ export class Home extends Component {
     }
 
     startMeeting = async () => {
-        this.call = this.callAgent.join({ meetingLink: this.txtMeetingLink.current.value }, {});
+        if (this.txtMeetingLink.current.value) {
+            this.call = this.callAgent.join({ meetingLink: this.txtMeetingLink.current.value }, {});
 
-        this.call.on('stateChanged', () => {
-            this.lblCallStatus.current.innerText = this.call.state;
-        })
+            this.call.on('stateChanged', () => {
+                this.lblCallStatus.current.innerText = this.call.state;
+            })
 
-        this.subscribeToRemoteParticipantInCall(this.call);
+            this.subscribeToRemoteParticipantInCall(this.call);
 
-        this.btnHangUp.current.disabled = !this.state.initiated;
-        this.btnJoinMeeting.current.disabled = this.state.initiated;
-        this.btnStopVideo.current.disabled = this.state.initiated;
-        this.btnStartVideo.current.disabled = !this.state.initiated;
-
+            this.btnHangUp.current.disabled = !this.state.initiated;
+            this.btnJoinMeeting.current.disabled = this.state.initiated;
+            this.btnStopVideo.current.disabled = this.state.initiated;
+            this.btnStartVideo.current.disabled = !this.state.initiated;
+        } else {
+            console.warn("Meeting URL is required.");
+        }
     }
 
 
