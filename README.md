@@ -1,2 +1,2 @@
-# communication-services-teams-interoperability-demo
+# Azure Communication Service and MS Teams interoperability demo
  
