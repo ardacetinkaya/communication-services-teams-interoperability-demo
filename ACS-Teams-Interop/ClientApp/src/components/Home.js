@@ -2,29 +2,40 @@
 import { CallClient } from "@azure/communication-calling";
 import { LocalVideoStream, VideoStreamRenderer } from "@azure/communication-calling";
 import { AzureCommunicationTokenCredential } from '@azure/communication-common';
+import { ChatClient } from "@azure/communication-chat";
 
 export class Home extends Component {
     static displayName = Home.name;
 
     call = null;
     callAgent = null;
+    chatClient = null;
+    chatThreadClient = null;
+
     placeCallOptions = null;
     deviceManager = null;
     localVideoStream = null;
     rendererLocal = null;
     rendererRemote = null;
 
+    messages = '';
+
     constructor(props) {
         super(props);
         this.state = {
             initiated: false,
-            btnInitText: "Initialize"
+            btnInitText: "Initialize",
+            userId: "",
+            userName: "Unknown"
         };
 
         this.txtUserName = React.createRef();
         this.txtMeetingLink = React.createRef();
+        this.txtMessageArea = React.createRef();
+        this.lstMessages = React.createRef();
         this.lblCallStatus = React.createRef();
 
+        this.btnMessageSend = React.createRef();
         this.btnStartVideo = React.createRef();
         this.btnStopVideo = React.createRef();
         this.btnJoinMeeting = React.createRef();
@@ -38,9 +49,11 @@ export class Home extends Component {
 
     init = async () => {
         try {
-            this.setState({ btnInitText:"Initializing..." });
+            this.setState({ btnInitText: "Initializing..." });
             const response = await fetch('token');
             const data = await response.json();
+
+            this.setState({ userId: data.identity });
 
             const callClient = new CallClient();
             const tokenCredential = new AzureCommunicationTokenCredential({
@@ -53,9 +66,14 @@ export class Home extends Component {
                 }
             });
 
-            var name = this.txtUserName.current.value;
-            if (!name) name = "Unknown";
-            this.callAgent = await callClient.createCallAgent(tokenCredential, { displayName: name });
+            this.chatClient = new ChatClient(
+                data.endpoint,
+                tokenCredential
+            );
+
+           
+            if (this.txtUserName.current.value) this.setState({ userName: this.txtUserName.current.value })
+            this.callAgent = await callClient.createCallAgent(tokenCredential, { displayName: this.state.userName });
             this.deviceManager = await callClient.getDeviceManager();
             this.setState({ initiated: true });
 
@@ -80,6 +98,29 @@ export class Home extends Component {
             this.call.on('stateChanged', () => {
                 this.lblCallStatus.current.innerText = this.call.state;
             })
+
+            await this.chatClient.startRealtimeNotifications();
+
+            //Subscribe the chat messages
+            const userId = this.state.userId;
+            this.chatClient.on("chatMessageReceived", async (e) => {
+
+                if (e.sender.kind === "microsoftTeamsUser") {
+                    await this.renderReceivedMessage(`${e.senderDisplayName}(w/MS Teams)`, e.message);
+                } else if (e.sender.kind === "communicationUser" && e.sender.communicationUserId === userId) {
+                    await this.renderSentMessage(e.senderDisplayName, e.message);
+                }
+
+            });
+
+            //To get chat messages, need to get thread id.
+            //Thread Id can be found in MeetingLink. Let's decode first...
+            var decodedMeetingLink = decodeURIComponent(this.txtMeetingLink.current.value);
+            var startIndex = decodedMeetingLink.indexOf("join/") + 5;
+            var endIndex = decodedMeetingLink.lastIndexOf("/");
+            var threadId = decodedMeetingLink.substring(startIndex, endIndex);
+
+            this.chatThreadClient = await this.chatClient.getChatThreadClient(threadId);
 
             this.subscribeToRemoteParticipantInCall(this.call);
 
@@ -191,31 +232,79 @@ export class Home extends Component {
         this.btnStopVideo.current.disabled = true;
     }
 
+    renderReceivedMessage = async (from, message) => {
+        this.messages += `<div class="d-flex text-left">
+                            <div class="pr-2 pl-1"> <span class="small"><strong>${from}</strong></span>
+                               <p class="small">${message}</p>
+                            </div>
+                          </div>`;
 
+        this.lstMessages.current.innerHTML = this.messages;
+    }
+
+    renderSentMessage = async (from, message) => {
+        this.messages += `<div class="d-flex text-right justify-content-end">
+                            <div class="pr-2"> <span class="small"><strong>${from}</strong></span>
+                               <p class="small">${message}</p>
+                            </div>
+                          </div>`;
+
+        this.lstMessages.current.innerHTML = this.messages;
+    }
+
+    sendMessage = async () => {
+        const sendMessageRequest = { content: this.txtMessageArea.current.value };
+        const sendMessageOptions = { senderDisplayName: this.state.userName };
+        await this.chatThreadClient.sendMessage(sendMessageRequest, sendMessageOptions);
+    }
 
     renderMeeting(isInitianted) {
         if (isInitianted)
             return (
-                <><div className="col-12 col-sm-4 col-md-4 col-lg-4 col-xl-4 text-center">
-                    Hello {this.txtUserName.current?.value}
-                    <p>Call state: <span ref={this.lblCallStatus} className="font-weight-bold"> - </span></p>
-                    <div>
-                        <button ref={this.btnJoinMeeting} type="button" className="btn btn-sm btn-primary mx-1" disabled={false} onClick={this.startMeeting}>Join Meeting</button>
-                        <button ref={this.btnHangUp} type="button" className="btn btn-sm btn-primary mx-1" onClick={this.leaveMeeting}>Leave Meeting</button>
-                    </div>
-                    <div className="mb-3"></div>
-                    <div>
-                        <button ref={this.btnStartVideo} type="button" className="btn btn-sm btn-primary mx-1" onClick={this.startVideo}>Start Video</button>
-                        <button ref={this.btnStopVideo}  type="button" className="btn btn-sm btn-primary mx-1" onClick={this.stopVideo}>Stop Video</button>
-                    </div>
-                </div><div className="col-12 col-sm-4 col-md-4 col-lg-4 col-xl-4 text-center">
-                        Local Video
-                    <div ref={this.mediaLocalVideo} style={{ backgroundColor: 'black', position: 'absolute', top: '50%', transform: 'translateY(-50%)' }}> </div>
+                <>
+                    <div className="col-12 col-sm-4 col-md-4 col-lg-4 col-xl-4 text-center">
+                        Hello <strong>{this.state.userName}</strong>
+                        <p>Call state: <span ref={this.lblCallStatus} className="font-weight-bold"> - </span></p>
+                        <div>
+                            <button ref={this.btnJoinMeeting} type="button" className="btn btn-sm btn-primary mx-1" disabled={false} onClick={this.startMeeting}>Join Meeting</button>
+                            <button ref={this.btnHangUp} type="button" className="btn btn-sm btn-primary mx-1" onClick={this.leaveMeeting}>Leave Meeting</button>
+                        </div>
+                        <div className="mb-3"></div>
+
+                        <div style={{ border: "1px solid lightblue" }}>
+                            <div style={{ height: "300px", width: "100%", overflowY: "scroll" }}>
+                                <div ref={this.lstMessages} className="px-2">
+                                    
+                                </div>
+                            </div>
+                            <form className="form-container">
+                                <div className="form-group">
+                                    <textarea className="form-control" placeholder="Type message.." ref={this.txtMessageArea} required></textarea>
+                                </div>
+                                <div className="form-group float-right mt-2">
+                                    <button type="button" className="btn btn-sm btn-primary mx-1" ref={this.btnMessageSend} onClick={this.sendMessage}>Send</button>
+                                </div>
+                            </form>
+
+                        </div>
                     </div>
                     <div className="col-12 col-sm-4 col-md-4 col-lg-4 col-xl-4 text-center">
-                        Remote Video from MS Teams
-                    <div ref={this.mediaRemoteVideo} style={{ backgroundColor: 'black', position: 'absolute', top: '50%', transform: 'translateY(-50%)' }}></div>
-                    </div></>
+                        <strong>Local Video</strong>
+                        <div style={{ border: "1px solid black", height: "200px", width: "100%" }}>
+                            <div ref={this.mediaLocalVideo} style={{ backgroundColor: 'black', position: 'absolute', top: '50%', transform: 'translateY(-50%)' }}> </div>
+                        </div>
+                        <div className="mt-2">
+                            <button ref={this.btnStartVideo} type="button" className="btn btn-sm btn-primary mx-1" onClick={this.startVideo}>Start Video</button>
+                            <button ref={this.btnStopVideo} type="button" className="btn btn-sm btn-primary mx-1" onClick={this.stopVideo}>Stop Video</button>
+                        </div>
+                    </div>
+                    <div className="col-12 col-sm-4 col-md-4 col-lg-4 col-xl-4 text-center">
+                        <strong>Remote Video from MS Teams</strong>
+                        <div style={{ border: "1px solid black", height: "200px", width: "100%" }}>
+                            <div ref={this.mediaRemoteVideo} style={{ backgroundColor: 'black', position: 'absolute', top: '50%', transform: 'translateY(-50%)' }}></div>
+                        </div>
+                    </div>
+                </>
             );
     }
 
@@ -236,7 +325,7 @@ export class Home extends Component {
                     <button ref={this.btnInit} type="button" className="btn btn-sm btn-primary mx-2" onClick={this.init}>{this.state.btnInitText}</button>
                     <button type="button" className="btn btn-sm btn-primary mx-2" onClick={this.clear}>Clear</button>
                 </div>
-                <div className="row pt-40 mt-40">
+                <div className="row mt-4">
                     {this.renderMeeting(isInitiated)}
                 </div>
             </div>

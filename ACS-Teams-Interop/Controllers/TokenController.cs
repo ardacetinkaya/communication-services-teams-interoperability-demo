@@ -18,6 +18,7 @@ namespace ACS_Teams_Interop.Controllers
         private readonly ILogger<TokenController> _logger;
         private readonly IConfiguration _configuration;
         private readonly string _connectionString = string.Empty;
+        private readonly string _endpoint = string.Empty;
         private readonly CommunicationIdentityClient _client = null;
 
         public TokenController(ILogger<TokenController> logger,IConfiguration configuration)
@@ -26,6 +27,7 @@ namespace ACS_Teams_Interop.Controllers
             _configuration = configuration;
             //Azure Communication Services connection string
             _connectionString = _configuration["ConnectionString"];
+            _endpoint = _configuration["EndPoint"];
             _client = new CommunicationIdentityClient(_connectionString);
 
         }
@@ -37,13 +39,14 @@ namespace ACS_Teams_Interop.Controllers
             var identityResponse = await _client.CreateUserAsync();
             var identity = identityResponse.Value;
 
-            var tokenResponse = await _client.GetTokenAsync(identity, scopes: new[] { CommunicationTokenScope.VoIP });
+            var tokenResponse = await _client.GetTokenAsync(identity, scopes: new[] { CommunicationTokenScope.VoIP, CommunicationTokenScope.Chat });
 
             return Ok(new
             {
                 Token = tokenResponse.Value.Token,
                 ExpiresOn = tokenResponse.Value.ExpiresOn,
-                Identity = identity.Id
+                Identity = identity.Id,
+                Endpoint = _endpoint
             });
         }
 
@@ -52,14 +55,15 @@ namespace ACS_Teams_Interop.Controllers
         {
             //Refresh token for already generated token identifier
             var identityToRefresh = new CommunicationUserIdentifier(id.ToString());
-            var tokenResponse = await _client.GetTokenAsync(identityToRefresh, scopes: new[] { CommunicationTokenScope.VoIP });
+            var tokenResponse = await _client.GetTokenAsync(identityToRefresh, scopes: new[] { CommunicationTokenScope.VoIP,CommunicationTokenScope.Chat });
 
 
             return Ok(new
             {
                 Token = tokenResponse.Value.Token,
                 ExpiresOn = tokenResponse.Value.ExpiresOn,
-                Identity = identityToRefresh.Id
+                Identity = identityToRefresh.Id,
+                Endpoint = _endpoint
             });
         }
     }
