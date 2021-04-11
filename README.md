@@ -6,11 +6,15 @@ Within this simple repository, I tried to understand upcoming features with this
 
 Looking forward for "GA" and try to share as I dig more about it.
 
+## UPDATES:
+- Text based chat with MS Teams client is added
+- Some UI improvements
+
 References:
 - [Teams interoperability](https://docs.microsoft.com/en-us/azure/communication-services/concepts/teams-interop)
 - [Get Started](https://docs.microsoft.com/en-us/azure/communication-services/quickstarts/voice-video-calling/get-started-teams-interop?pivots=platform-web)
 
 
-![acs-msteams](https://user-images.githubusercontent.com/4550197/114276576-dc97ac00-9a2f-11eb-824c-d22fa293695c.png)
+![chat-with-teams](https://user-images.githubusercontent.com/4550197/114297048-2081c400-9ab7-11eb-818b-0c97c3313021.png)
 ![join-meeting](https://user-images.githubusercontent.com/4550197/114276534-aeb26780-9a2f-11eb-9630-574b8b6adf3a.png)
 ![meeting-with-camera](https://user-images.githubusercontent.com/4550197/114276535-afe39480-9a2f-11eb-9c1e-ac74b3ce8cb4.png)
