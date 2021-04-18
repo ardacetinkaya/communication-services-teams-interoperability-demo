@@ -4,6 +4,7 @@ import { LocalVideoStream, VideoStreamRenderer } from "@azure/communication-call
 import { AzureCommunicationTokenCredential } from '@azure/communication-common';
 import { ChatClient } from "@azure/communication-chat";
 
+
 export class Home extends Component {
     static displayName = Home.name;
 
@@ -26,7 +27,9 @@ export class Home extends Component {
             initiated: false,
             btnInitText: "Initialize",
             userId: "",
-            userName: "Unknown"
+            userName: "Unknown",
+            agentAvailability: "Unknwon",
+            meetingLink: ""
         };
 
         this.txtUserName = React.createRef();
@@ -34,7 +37,7 @@ export class Home extends Component {
         this.txtMessageArea = React.createRef();
         this.lstMessages = React.createRef();
         this.lblCallStatus = React.createRef();
-
+        this.lblAgentStatus = React.createRef();
         this.btnMessageSend = React.createRef();
         this.btnStartVideo = React.createRef();
         this.btnStopVideo = React.createRef();
@@ -45,6 +48,7 @@ export class Home extends Component {
         this.mediaLocalVideo = React.createRef();
         this.mediaRemoteVideo = React.createRef();
 
+
     }
 
     init = async () => {
@@ -52,6 +56,7 @@ export class Home extends Component {
             this.setState({ btnInitText: "Initializing..." });
             const response = await fetch('token');
             const data = await response.json();
+
 
             this.setState({ userId: data.identity });
 
@@ -71,19 +76,40 @@ export class Home extends Component {
                 tokenCredential
             );
 
-           
+
             if (this.txtUserName.current.value) this.setState({ userName: this.txtUserName.current.value })
             this.callAgent = await callClient.createCallAgent(tokenCredential, { displayName: this.state.userName });
             this.deviceManager = await callClient.getDeviceManager();
             this.setState({ initiated: true });
 
             this.btnJoinMeeting.current.disabled = !this.state.initiated;
-
             this.btnHangUp.current.disabled = this.state.initiated;
             this.btnStartVideo.current.disabled = this.state.initiated;
             this.btnStopVideo.current.disabled = this.state.initiated;
             this.setState({ btnInitText: "Initialized" });
             this.btnInit.current.disabled = this.state.initiated;
+
+
+            const agentDataResponse = await fetch('api/agent');
+            const agentData = await agentDataResponse.json();
+
+            await fetch(`api/graph/beta/users/${agentData.agentId}/presence`,
+                {
+                    method: "GET"
+                })
+                .then(response => response.json())
+                .then(data => {
+                    this.setState({ meetingLink: agentData.meetingLink })
+                    this.setState({ agentAvailability: data.data.availability });
+                    this.lblAgentStatus.current.innerText = data.data.availability;
+
+                })
+                .catch(error => {
+                    console.error('Unable to get presence', error);
+                    this.lblAgentStatus.current.innerText = "Unknown";
+                });
+
+
 
         } catch (e) {
             console.error(e);
@@ -92,8 +118,15 @@ export class Home extends Component {
     }
 
     startMeeting = async () => {
-        if (this.txtMeetingLink.current.value) {
-            this.call = this.callAgent.join({ meetingLink: this.txtMeetingLink.current.value }, {});
+        var meetingLink;
+        console.log(this.state.agentAvailability);
+        if (this.state.agentAvailability === "Available")
+            meetingLink = this.state.meetingLink
+        else
+            meetingLink = this.txtMeetingLink.current.value;
+
+        if (meetingLink) {
+            this.call = this.callAgent.join({ meetingLink: meetingLink }, {});
 
             this.call.on('stateChanged', () => {
                 this.lblCallStatus.current.innerText = this.call.state;
@@ -115,7 +148,7 @@ export class Home extends Component {
 
             //To get chat messages, need to get thread id.
             //Thread Id can be found in MeetingLink. Let's decode first...
-            var decodedMeetingLink = decodeURIComponent(this.txtMeetingLink.current.value);
+            var decodedMeetingLink = decodeURIComponent(meetingLink);
             var startIndex = decodedMeetingLink.indexOf("join/") + 5;
             var endIndex = decodedMeetingLink.lastIndexOf("/");
             var threadId = decodedMeetingLink.substring(startIndex, endIndex);
@@ -182,6 +215,7 @@ export class Home extends Component {
         this.setState({ initiated: false });
         this.btnInit.current.disabled = this.state.initiated;
         this.setState({ btnInitText: "Initialize" });
+
     }
 
     leaveMeeting = async () => {
@@ -192,18 +226,12 @@ export class Home extends Component {
         if (this.rendererRemote) {
             this.rendererRemote.dispose();
         }
-
-
         await this.call.hangUp();
-
         this.btnHangUp.current.disabled = true;
         this.btnJoinMeeting.current.disabled = false;
-
         this.lblCallStatus.current.innerText = "-";
-
         this.btnStartVideo.current.disabled = true;
         this.btnStopVideo.current.disabled = true;
-
 
     }
 
@@ -223,7 +251,6 @@ export class Home extends Component {
         this.btnStopVideo.current.disabled = false;
 
     }
-
 
     stopVideo = async () => {
         await this.call.stopVideo(this.localVideoStream);
@@ -258,75 +285,104 @@ export class Home extends Component {
         await this.chatThreadClient.sendMessage(sendMessageRequest, sendMessageOptions);
     }
 
-    renderMeeting(isInitianted) {
-        if (isInitianted)
+    renderMeetingLink(isAgentOnline) {
+        if (isAgentOnline) {
+            //Agent is online can join pre-defined meeting.
+        } else {
+            //Input for some other meeting link
+            return (<>
+                <p>Enter the meeting info</p>
+                <input ref={this.txtMeetingLink} type="text" placeholder="Teams meeting link" style={{ marginBottom: '1em', width: '40%' }} />
+            </>);
+        }
+    }
+    renderLobby(isInitianted) {
+        if (isInitianted) {
+            var className = "badge badge-warning"
+            if (this.state.agentAvailability === "Away") className = "badge badge-warning";
+            else if (this.state.agentAvailability === "Available") className = "badge badge-success";
+            else if (this.state.agentAvailability === "DoNotDisturb") className = "badge badge-danger";
+            else if (this.state.agentAvailability === "Busy") className = "badge badge-danger";
+            else className = "badge badge-warning";
             return (
                 <>
-                    <div className="col-12 col-sm-4 col-md-4 col-lg-4 col-xl-4 text-center">
+                    <div className="text-center">
                         Hello <strong>{this.state.userName}</strong>
                         <p>Call state: <span ref={this.lblCallStatus} className="font-weight-bold"> - </span></p>
+                        <p>Your agent is <span ref={this.lblAgentStatus} className={className}></span></p>
+                        {this.renderMeetingLink(this.state.agentAvailability === "Available")}
                         <div>
                             <button ref={this.btnJoinMeeting} type="button" className="btn btn-sm btn-primary mx-1" disabled={false} onClick={this.startMeeting}>Join Meeting</button>
                             <button ref={this.btnHangUp} type="button" className="btn btn-sm btn-primary mx-1" onClick={this.leaveMeeting}>Leave Meeting</button>
                         </div>
                         <div className="mb-3"></div>
 
-                        <div style={{ border: "1px solid lightblue" }}>
-                            <div style={{ height: "300px", width: "100%", overflowY: "scroll" }}>
-                                <div ref={this.lstMessages} className="px-2">
-                                    
-                                </div>
-                            </div>
-                            <form className="form-container">
-                                <div className="form-group">
-                                    <textarea className="form-control" placeholder="Type message.." ref={this.txtMessageArea} required></textarea>
-                                </div>
-                                <div className="form-group float-right mt-2">
-                                    <button type="button" className="btn btn-sm btn-primary mx-1" ref={this.btnMessageSend} onClick={this.sendMessage}>Send</button>
-                                </div>
-                            </form>
+                    </div>
 
-                        </div>
-                    </div>
-                    <div className="col-12 col-sm-4 col-md-4 col-lg-4 col-xl-4 text-center">
-                        <strong>Local Video</strong>
-                        <div style={{ border: "1px solid black", height: "200px", width: "100%" }}>
-                            <div ref={this.mediaLocalVideo} style={{ backgroundColor: 'black', position: 'absolute', top: '50%', transform: 'translateY(-50%)' }}> </div>
-                        </div>
-                        <div className="mt-2">
-                            <button ref={this.btnStartVideo} type="button" className="btn btn-sm btn-primary mx-1" onClick={this.startVideo}>Start Video</button>
-                            <button ref={this.btnStopVideo} type="button" className="btn btn-sm btn-primary mx-1" onClick={this.stopVideo}>Stop Video</button>
-                        </div>
-                    </div>
-                    <div className="col-12 col-sm-4 col-md-4 col-lg-4 col-xl-4 text-center">
-                        <strong>Remote Video from MS Teams</strong>
-                        <div style={{ border: "1px solid black", height: "200px", width: "100%" }}>
-                            <div ref={this.mediaRemoteVideo} style={{ backgroundColor: 'black', position: 'absolute', top: '50%', transform: 'translateY(-50%)' }}></div>
-                        </div>
-                    </div>
+                    {this.renderMeeting()}
                 </>
             );
+        }
+    }
+    renderMeeting() {
+        return (<>
+            <div className="row mt-4">
+                <div className="col-12 col-sm-4 col-md-4 col-lg-4 col-xl-4 text-center">
+                    {this.renderChat()}
+                </div>
+                <div className="col-12 col-sm-4 col-md-4 col-lg-4 col-xl-4 text-center">
+                    <strong>Local Video</strong>
+                    <div style={{ border: "1px solid black", height: "200px", width: "100%" }}>
+                        <div ref={this.mediaLocalVideo} style={{ backgroundColor: 'black', position: 'absolute', top: '50%', transform: 'translateY(-50%)' }}> </div>
+                    </div>
+                    <div className="mt-2">
+                        <button ref={this.btnStartVideo} type="button" className="btn btn-sm btn-primary mx-1" onClick={this.startVideo}>Start Video</button>
+                        <button ref={this.btnStopVideo} type="button" className="btn btn-sm btn-primary mx-1" onClick={this.stopVideo}>Stop Video</button>
+                    </div>
+                </div>
+                <div className="col-12 col-sm-4 col-md-4 col-lg-4 col-xl-4 text-center">
+                    <strong>Remote Video from MS Teams</strong>
+                    <div style={{ border: "1px solid black", height: "200px", width: "100%" }}>
+                        <div ref={this.mediaRemoteVideo} style={{ backgroundColor: 'black', position: 'absolute', top: '50%', transform: 'translateY(-50%)' }}></div>
+                    </div>
+                </div>
+            </div>
+        </>)
+    }
+    renderChat() {
+        return (<>
+            <div style={{ border: "1px solid lightblue" }}>
+                <div style={{ height: "300px", width: "100%", overflowY: "scroll" }}>
+                    <div ref={this.lstMessages} className="px-2">
+
+                    </div>
+                </div>
+                <form className="form-container">
+                    <div className="form-group">
+                        <textarea className="form-control" placeholder="Type message.." ref={this.txtMessageArea} required></textarea>
+                    </div>
+                    <div className="form-group float-right mt-2">
+                        <button type="button" className="btn btn-sm btn-primary mx-1" ref={this.btnMessageSend} onClick={this.sendMessage}>Send</button>
+                    </div>
+                </form>
+
+            </div>
+        </>)
     }
 
     render() {
         const isInitiated = this.state.initiated;
         return (
             <div>
-                <div className="row">
-
-                    <div className="col-12 col-sm-6 col-md-6 col-lg-6 col-xl-6 text-center">
-                        <input ref={this.txtUserName} type="text" placeholder="Your name" style={{ marginBottom: '1em', width: '100%' }} />
-                    </div>
-                    <div className="col-12 col-sm-6 col-md-6 col-lg-6 col-xl-6 text-center">
-                        <input ref={this.txtMeetingLink} type="text" placeholder="Teams meeting link" style={{ marginBottom: '1em', width: '100%' }} />
-                    </div>
+                <div className="text-center">
+                    <input ref={this.txtUserName} type="text" placeholder="Your name" style={{ marginBottom: '1em', width: '30%' }} />
                 </div>
                 <div className="text-center">
                     <button ref={this.btnInit} type="button" className="btn btn-sm btn-primary mx-2" onClick={this.init}>{this.state.btnInitText}</button>
                     <button type="button" className="btn btn-sm btn-primary mx-2" onClick={this.clear}>Clear</button>
                 </div>
-                <div className="row mt-4">
-                    {this.renderMeeting(isInitiated)}
+                <div className="mt-4">
+                    {this.renderLobby(isInitiated)}
                 </div>
             </div>
 

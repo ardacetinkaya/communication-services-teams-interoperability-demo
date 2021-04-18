@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.SpaServices.ReactDevelopmentServer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.Linq;
+using System.Security;
 
 namespace ACS_Teams_Interop
 {
@@ -21,6 +23,21 @@ namespace ACS_Teams_Interop
         public void ConfigureServices(IServiceCollection services)
         {
 
+            //Not a good way, use secret-store like KeyVault
+            SecureString secure = new SecureString();
+            Configuration["GraphAPIUser:Password"].ToCharArray().ToList().ForEach(c => secure.AppendChar(c));
+            secure.MakeReadOnly();
+
+            services.AddSingleton<GraphAuthenticator>(new GraphAuthenticator(Configuration["ClientId"],
+                Configuration["ClientSecret"],
+                Configuration["TenantId"],
+                Configuration["RedirectURL"],
+                Configuration["GraphScope"],
+                AuthenticatorProvider.PublicClient,
+                Configuration["GraphAPIUser:Username"],
+                secure));
+
+            services.AddHttpClient<GraphService>();
             services.AddControllersWithViews();
 
             // In production, the React files will be served from this directory

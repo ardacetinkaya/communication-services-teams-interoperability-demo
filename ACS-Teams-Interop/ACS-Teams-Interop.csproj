@@ -13,6 +13,10 @@
   <ItemGroup>
     <PackageReference Include="Azure.Communication.Identity" Version="1.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="5.0.4" />
+    <PackageReference Include="Microsoft.Graph" Version="3.29.0" />
+    <PackageReference Include="Microsoft.Graph.Core" Version="1.25.1" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.29.0" />
+    <PackageReference Include="Microsoft.Identity.Web" Version="1.9.1" />
   </ItemGroup>
 
   <ItemGroup>
