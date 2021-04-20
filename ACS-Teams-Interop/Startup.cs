@@ -37,7 +37,7 @@ namespace ACS_Teams_Interop
                 Configuration["GraphAPIUser:Username"],
                 secure));
 
-            services.AddHttpClient<GraphService>();
+            services.AddTransient<GraphService>();
             services.AddControllersWithViews();
 
             // In production, the React files will be served from this directory

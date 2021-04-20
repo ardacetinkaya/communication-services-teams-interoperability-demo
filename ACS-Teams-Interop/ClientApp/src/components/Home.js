@@ -213,7 +213,7 @@ export class Home extends Component {
             await this.leaveMeeting();
         }
         this.setState({ initiated: false });
-        this.btnInit.current.disabled = this.state.initiated;
+        this.btnInit.current.disabled = false;
         this.setState({ btnInitText: "Initialize" });
 
     }
