@@ -1,3 +1,4 @@
+using ACS_Teams_Interop.Graph;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -22,22 +23,7 @@ namespace ACS_Teams_Interop
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-
-            //Not a good way, use secret-store like KeyVault
-            SecureString secure = new SecureString();
-            Configuration["GraphAPIUser:Password"].ToCharArray().ToList().ForEach(c => secure.AppendChar(c));
-            secure.MakeReadOnly();
-
-            services.AddSingleton<GraphAuthenticator>(new GraphAuthenticator(Configuration["ClientId"],
-                Configuration["ClientSecret"],
-                Configuration["TenantId"],
-                Configuration["RedirectURL"],
-                Configuration["GraphScope"],
-                AuthenticatorProvider.PublicClient,
-                Configuration["GraphAPIUser:Username"],
-                secure));
-
-            services.AddTransient<GraphService>();
+            services.AddGraphAPIService(Configuration);
             services.AddControllersWithViews();
 
             // In production, the React files will be served from this directory

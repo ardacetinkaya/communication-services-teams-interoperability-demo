@@ -1,5 +1,4 @@
-﻿
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using System;
 using System.Net.Http;
@@ -23,15 +22,15 @@ namespace ACS_Teams_Interop
             this._graphAuthenticator = authenticator;
         }
 
-        public async Task<HttpResponseMessage> ProcessRequestAsync(string method, string url, object content, string contentType = "application/json")
+        public async Task<HttpResponseMessage> ProcessRequestAsync(string method, string url, object content, string token = "", string contentType = "application/json")
         {
             if (_graphAuthenticator == null) throw new ArgumentNullException(nameof(_graphAuthenticator));
             try
             {
-                var client = _graphAuthenticator.GetAuthenticatedClient();
+                var client = _graphAuthenticator.GetAuthenticatedClient(AuthenticatorProvider.ConfidentialUserClient, token);
                 var requestUrl = $"{client.BaseUrl.Replace("/v1.0", "")}/{url}";
                 _logger.LogDebug($"Request:{method} {requestUrl}");
-                var request = new BaseRequest(requestUrl, client,null)
+                var request = new BaseRequest(requestUrl, client, null)
                 {
                     Method = method
                 };
@@ -44,7 +43,8 @@ namespace ACS_Teams_Interop
                 var errorContent = new StringContent(ex.Message);
                 var errorResponse = new HttpResponseMessage
                 {
-                    Content = errorContent
+                    Content = errorContent,
+                    StatusCode = System.Net.HttpStatusCode.InternalServerError
                 };
                 return errorResponse;
 

@@ -23,7 +23,7 @@ namespace ACS_Teams_Interop.Controllers
         [Route("{*url}")]
         public async Task<IActionResult> GetAsync(string url)
         {
-            var response = await _graphService.ProcessRequestAsync("GET", url, null, Request.ContentType);
+            var response = await _graphService.ProcessRequestAsync("GET", url, null, string.Empty, Request.ContentType);
             if (response.IsSuccessStatusCode)
             {
                 var responseData = await response.Content.ReadAsStringAsync();
